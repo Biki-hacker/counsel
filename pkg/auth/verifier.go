@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 
@@ -45,7 +46,11 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 				sub = "google_" + strings.ReplaceAll(email, "@", "_")
 			}
 			if len(parts) > 2 && parts[2] != "" {
-				displayName = parts[2]
+				if unescaped, err := url.QueryUnescape(parts[2]); err == nil && unescaped != "" {
+					displayName = unescaped
+				} else {
+					displayName = parts[2]
+				}
 			} else {
 				// Clean display name from email
 				localPart := strings.Split(email, "@")[0]
@@ -70,7 +75,11 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 				sub = "demo_" + strings.ReplaceAll(email, "@", "_")
 			}
 			if len(parts) > 2 && parts[2] != "" {
-				displayName = parts[2]
+				if unescaped, err := url.QueryUnescape(parts[2]); err == nil && unescaped != "" {
+					displayName = unescaped
+				} else {
+					displayName = parts[2]
+				}
 			} else {
 				// Format clean display name from email (e.g. alice@counsel.law -> Alice Counsel)
 				localPart := strings.Split(email, "@")[0]

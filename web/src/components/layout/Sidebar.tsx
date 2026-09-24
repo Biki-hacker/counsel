@@ -296,11 +296,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   flexShrink: 0,
                 }}
               >
-                {user.displayName ? user.displayName[0].toUpperCase() : 'C'}
+                {(() => {
+                  try {
+                    const clean = decodeURIComponent(user.displayName || 'Counsel');
+                    return clean[0].toUpperCase();
+                  } catch {
+                    return 'C';
+                  }
+                })()}
               </div>
               <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
                 <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {user.displayName || 'Counsel User'}
+                  {(() => {
+                    try {
+                      return decodeURIComponent(user.displayName || 'Counsel User');
+                    } catch {
+                      return user.displayName || 'Counsel User';
+                    }
+                  })()}
                 </span>
                 <span style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {user.email}
