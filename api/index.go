@@ -4,13 +4,13 @@ import (
 	"net/http"
 	"sync"
 
-	"counsel/internal/ai"
-	"counsel/internal/api"
-	"counsel/internal/auth"
-	"counsel/internal/config"
-	"counsel/internal/logger"
-	"counsel/internal/ratelimit"
-	"counsel/internal/store"
+	"counsel/pkg/ai"
+	"counsel/pkg/api"
+	"counsel/pkg/auth"
+	"counsel/pkg/config"
+	"counsel/pkg/logger"
+	"counsel/pkg/ratelimit"
+	"counsel/pkg/store"
 )
 
 var (

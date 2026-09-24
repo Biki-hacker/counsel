@@ -35,7 +35,7 @@ build/
 *.dylib
 *.test
 *.out
-server
+/server
 counsel-srv.exe
 
 # Vercel & Deployment

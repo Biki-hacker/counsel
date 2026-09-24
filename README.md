@@ -81,7 +81,7 @@ HTTP Server-Sent Events (SSE)                             Persistent WebSocket
           │                                                         │
           └───────────────────────────┬─────────────────────────────┘
                                       ▼
-                           internal/api/router.go
+                           pkg/api/router.go
                                       │
           ┌───────────────────────────┼─────────────────────────────┐
           ▼                           ▼                             ▼
@@ -110,7 +110,7 @@ counsel/
 │   └── server/                 # Standalone / Docker server entrypoint
 │       ├── main.go             # Native HTTP & WebSocket server
 │       └── main_test.go        # Server lifecycle tests
-├── internal/                   # Private core packages
+├── pkg/                        # Core shared packages
 │   ├── ai/                     # OpenRouter client, circuit breaker, prompts, registry
 │   ├── api/                    # REST routes, SSE chat streaming handler, middleware
 │   ├── auth/                   # Canonical identity manager, Firebase & Supabase verifiers
@@ -238,9 +238,9 @@ Counsel includes end-to-end and unit test suites across all backend packages and
 go test -count=1 -short ./...
 
 # Run tests with verbose output for specific subsystems
-go test -v ./internal/api
-go test -v ./internal/ai
-go test -v ./internal/ratelimit
+go test -v ./pkg/api
+go test -v ./pkg/ai
+go test -v ./pkg/ratelimit
 go test -v ./api
 ```
 
