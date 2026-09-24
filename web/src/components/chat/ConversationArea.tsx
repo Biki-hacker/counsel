@@ -29,11 +29,14 @@ export const ConversationArea: React.FC<ConversationAreaProps> = ({
 
   const isWaitingForAssistant =
     isStreaming &&
-    messages.length > 0 &&
-    messages[messages.length - 1].role === 'user';
+    (messages.length === 0 ||
+      messages[messages.length - 1].role === 'user' ||
+      (messages[messages.length - 1].role === 'assistant' &&
+        !messages[messages.length - 1].content &&
+        messages[messages.length - 1].status === 'streaming'));
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, statusText, isStreaming]);
 
   if (messages.length === 0) {
@@ -72,14 +75,16 @@ export const ConversationArea: React.FC<ConversationAreaProps> = ({
           width: '100%',
         }}
       >
-        {messages.map((msg) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            statusText={statusText}
-            onRetry={onRetry}
-          />
-        ))}
+        {messages
+          .filter((msg) => msg.role !== 'assistant' || msg.content || msg.status === 'failed')
+          .map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              statusText={statusText}
+              onRetry={onRetry}
+            />
+          ))}
         {isWaitingForAssistant && (
           <TypingIndicator statusText={statusText || 'Counsel is typing...'} mode={activeMode} />
         )}

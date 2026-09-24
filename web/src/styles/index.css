@@ -284,7 +284,7 @@ h1, h2, h3, .font-editorial {
     opacity: 0.35;
   }
   30% {
-    transform: translateY(-5px);
+    transform: translateY(-7px);
     opacity: 1;
   }
 }
@@ -302,25 +302,26 @@ h1, h2, h3, .font-editorial {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.45rem;
+  gap: 0.5rem;
+  animation: fadeIn 200ms var(--ease-out);
 }
 
 .typing-bubble {
   display: inline-flex;
   align-items: center;
-  gap: 5.5px;
-  padding: 0.75rem 1.05rem;
+  gap: 6px;
+  padding: 11px 17px;
   background-color: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: 18px 18px 18px 4px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
   width: fit-content;
   user-select: none;
 }
 
 .typing-dot {
-  width: 7.5px;
-  height: 7.5px;
+  width: 8.5px;
+  height: 8.5px;
   border-radius: 50%;
   background-color: var(--accent);
   display: inline-block;
@@ -340,12 +341,12 @@ h1, h2, h3, .font-editorial {
 }
 
 .typing-status-pill {
-  font-size: 12px;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  color: var(--text-secondary);
   font-style: italic;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
   animation: fadeIn 200ms var(--ease-out);
 }
 
@@ -362,10 +363,13 @@ h1, h2, h3, .font-editorial {
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  * {
+  *:not(.typing-dot):not(.streaming-cursor) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .typing-dot {
+    animation-duration: 2s !important;
   }
 }

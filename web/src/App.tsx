@@ -12,6 +12,7 @@ import {
 } from './types';
 import { api } from './api/client';
 import { wsClient } from './api/ws';
+import { chatStorage } from './utils/chatStorage';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
 import { ConversationArea } from './components/chat/ConversationArea';
@@ -26,14 +27,18 @@ import { DeleteConfirmationModal } from './components/modals/DeleteConfirmationM
 export const App: React.FC = () => {
   const { user, logout, updateUser } = useAuth();
 
-  // State
+  // State with initial restoration from local storage
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('counsel_theme') as 'light' | 'dark') || 'light';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
-  const activeConvIdRef = useRef<string | null>(null);
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    return chatStorage.getStoredConversations();
+  });
+  const [activeConvId, setActiveConvId] = useState<string | null>(() => {
+    return chatStorage.getActiveConvId();
+  });
+  const activeConvIdRef = useRef<string | null>(chatStorage.getActiveConvId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [statusText, setStatusText] = useState<string | undefined>();
   const [isStreaming, setIsStreaming] = useState(false);
@@ -55,11 +60,47 @@ export const App: React.FC = () => {
   const [conversationToDelete, setConversationToDelete] = useState<{ id: string; title: string } | null>(null);
   const [isDeletingChat, setIsDeletingChat] = useState(false);
 
+  // Typewriter streaming queue refs
+  const deltaQueueRef = useRef<string>('');
+  const typewriterTimerRef = useRef<any>(null);
+  const isStreamCompleteRef = useRef<boolean>(false);
+  const completeUsageUnitsRef = useRef<number | undefined>(undefined);
+
+  // Stop typewriter interval cleanly
+  const stopTypewriter = useCallback(() => {
+    if (typewriterTimerRef.current) {
+      clearInterval(typewriterTimerRef.current);
+      typewriterTimerRef.current = null;
+    }
+    deltaQueueRef.current = '';
+    isStreamCompleteRef.current = false;
+    completeUsageUnitsRef.current = undefined;
+  }, []);
+
   // Apply theme to root
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('counsel_theme', theme);
   }, [theme]);
+
+  // Restore cached conversation and messages on initial mount
+  useEffect(() => {
+    const savedActiveId = chatStorage.getActiveConvId();
+    if (savedActiveId) {
+      const stored = chatStorage.getStoredConversation(savedActiveId);
+      if (stored) {
+        if (stored.messages && stored.messages.length > 0) {
+          setMessages(stored.messages);
+        }
+        if (stored.conversation) {
+          if (stored.conversation.legalMode) setActiveMode(stored.conversation.legalMode);
+          if (stored.conversation.jurisdiction) setJurisdiction(stored.conversation.jurisdiction);
+          if (stored.conversation.aiProvider) setProvider(stored.conversation.aiProvider);
+          if (stored.conversation.aiMode) setAiMode(stored.conversation.aiMode);
+        }
+      }
+    }
+  }, []);
 
   // Track previous user ID to detect switches or logouts
   const prevUserIdRef = useRef<string | null>(null);
@@ -68,17 +109,17 @@ export const App: React.FC = () => {
   useEffect(() => {
     const currentUserId = user?.id || null;
     if (prevUserIdRef.current !== currentUserId) {
-      // Cancel active streaming if changing user
+      stopTypewriter();
       if (activeConvIdRef.current) {
         wsClient.cancel(activeConvIdRef.current);
       }
-      // Reset all session data cleanly to prevent data leakage between accounts
       activeConvIdRef.current = null;
       setActiveConvId(null);
+      chatStorage.setActiveConvId(null);
       setMessages([]);
       setStatusText(undefined);
       setIsStreaming(false);
-      setConversations([]);
+      setConversations(chatStorage.getStoredConversations());
       setAvailableDocs([]);
       setQuotaUnits(undefined);
       setActiveMode('general');
@@ -93,9 +134,9 @@ export const App: React.FC = () => {
       if (user.preferredProvider) setProvider(user.preferredProvider);
       if (user.thinkingDefault) setAiMode('thinking');
     }
-  }, [user]);
+  }, [user, stopTypewriter]);
 
-  // Load conversations and documents
+  // Load conversations and documents, merging server and persistent storage
   const refreshData = useCallback(async () => {
     if (!user) {
       setConversations([]);
@@ -105,12 +146,30 @@ export const App: React.FC = () => {
     }
     try {
       const [convRes, docRes, usageRes] = await Promise.all([
-        api.listConversations(),
-        api.listDocuments(),
-        api.getUsage(),
+        api.listConversations().catch(() => ({ conversations: [] })),
+        api.listDocuments().catch(() => ({ documents: [] })),
+        api.getUsage().catch(() => ({ quota: undefined })),
       ]);
-      setConversations(convRes.conversations || []);
+
+      const localConvs = chatStorage.getStoredConversations();
+      const serverConvs = convRes.conversations || [];
+      const convMap = new Map<string, Conversation>();
+
+      for (const c of localConvs) {
+        convMap.set(c.id, c);
+      }
+      for (const c of serverConvs) {
+        convMap.set(c.id, c);
+      }
+
+      const merged = Array.from(convMap.values()).sort(
+        (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+
+      chatStorage.saveConversations(merged);
+      setConversations(merged);
       setAvailableDocs(docRes.documents || []);
+
       if (usageRes.quota) {
         setQuotaUnits({
           used: usageRes.quota.usedToday,
@@ -118,7 +177,7 @@ export const App: React.FC = () => {
         });
       }
     } catch {
-      // Silently handle in initial load
+      setConversations(chatStorage.getStoredConversations());
     }
   }, [user]);
 
@@ -126,11 +185,70 @@ export const App: React.FC = () => {
     refreshData();
   }, [refreshData]);
 
-  // Load conversation messages with stream abort for previous conversation
-  const loadConversation = useCallback(async (convId: string) => {
-    if (convId === activeConvIdRef.current) return;
+  // Adaptive typewriter streaming engine
+  const startTypewriter = useCallback(() => {
+    if (typewriterTimerRef.current) return;
 
-    // Abort active stream on previous consultation
+    typewriterTimerRef.current = setInterval(() => {
+      if (deltaQueueRef.current.length > 0) {
+        const qLen = deltaQueueRef.current.length;
+        // Adaptive speed: 14 chars per 22ms when buffer is large, down to 3 chars when streaming live
+        const chunkSize = qLen > 300 ? 14 : qLen > 100 ? 8 : qLen > 30 ? 4 : 2;
+        const slice = deltaQueueRef.current.slice(0, chunkSize);
+        deltaQueueRef.current = deltaQueueRef.current.slice(chunkSize);
+
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role === 'assistant') {
+            const updatedLast: Message = {
+              ...last,
+              content: last.content + slice,
+            };
+            const updated = [...prev.slice(0, -1), updatedLast];
+            if (last.conversationId) {
+              chatStorage.saveMessages(last.conversationId, updated);
+            }
+            return updated;
+          }
+          return prev;
+        });
+      } else if (isStreamCompleteRef.current) {
+        // Entire response typed out and server signaled completion
+        clearInterval(typewriterTimerRef.current);
+        typewriterTimerRef.current = null;
+        isStreamCompleteRef.current = false;
+        setIsStreaming(false);
+        setStatusText(undefined);
+
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last.role === 'assistant') {
+            const completedMsg: Message = {
+              ...last,
+              status: 'completed',
+              usageUnits: completeUsageUnitsRef.current,
+            };
+            const updated = [...prev.slice(0, -1), completedMsg];
+            if (last.conversationId) {
+              chatStorage.saveMessages(last.conversationId, updated);
+            }
+            return updated;
+          }
+          return prev;
+        });
+
+        refreshData();
+      }
+    }, 22);
+  }, [refreshData]);
+
+  // Load conversation messages with instant cache lookup and graceful serverless fallback
+  const loadConversation = useCallback(async (convId: string) => {
+    if (convId === activeConvIdRef.current && messages.length > 0) return;
+
+    stopTypewriter();
     if (activeConvIdRef.current) {
       wsClient.cancel(activeConvIdRef.current);
     }
@@ -139,27 +257,52 @@ export const App: React.FC = () => {
 
     activeConvIdRef.current = convId;
     setActiveConvId(convId);
+    chatStorage.setActiveConvId(convId);
+
+    // 1. Instantly display locally cached messages
+    const cached = chatStorage.getStoredConversation(convId);
+    if (cached) {
+      if (cached.messages && cached.messages.length > 0) {
+        setMessages(cached.messages);
+      }
+      if (cached.conversation) {
+        if (cached.conversation.legalMode) setActiveMode(cached.conversation.legalMode);
+        if (cached.conversation.jurisdiction) setJurisdiction(cached.conversation.jurisdiction);
+        if (cached.conversation.aiProvider) setProvider(cached.conversation.aiProvider);
+        if (cached.conversation.aiMode) setAiMode(cached.conversation.aiMode);
+      }
+    } else {
+      setMessages([]);
+    }
+
+    // 2. Fetch from backend to sync fresh server messages
     try {
       const res = await api.getConversation(convId);
-      // Ensure user hasn't clicked another consultation during async fetch
       if (activeConvIdRef.current === convId) {
-        setMessages(res.messages || []);
-        setActiveMode(res.conversation.legalMode || 'general');
-        setJurisdiction(res.conversation.jurisdiction || 'in');
-        setProvider(res.conversation.aiProvider || 'nvidia');
-        setAiMode(res.conversation.aiMode || 'normal');
+        if (res.messages && res.messages.length > 0) {
+          setMessages(res.messages);
+          chatStorage.saveMessages(convId, res.messages);
+        }
+        if (res.conversation) {
+          chatStorage.saveConversation(res.conversation);
+          setActiveMode(res.conversation.legalMode || 'general');
+          setJurisdiction(res.conversation.jurisdiction || 'in');
+          setProvider(res.conversation.aiProvider || 'nvidia');
+          setAiMode(res.conversation.aiMode || 'normal');
+        }
       }
     } catch {
-      if (activeConvIdRef.current === convId) {
-        setMessages([]);
+      // If server returns 404 due to serverless cold-start, retain cached messages
+      const currentCache = chatStorage.getStoredMessages(convId);
+      if (activeConvIdRef.current === convId && currentCache.length > 0) {
+        setMessages(currentCache);
       }
     }
-  }, []);
+  }, [messages.length, stopTypewriter]);
 
-  // WebSocket Subscription with strict conversation isolation
+  // WebSocket / SSE Subscription with typewriter streaming and storage sync
   useEffect(() => {
     const unsubscribe = wsClient.subscribe((event: ServerEnvelope) => {
-      // Check if event targets the currently active conversation
       const isCurrentConv =
         !event.conversationId ||
         !activeConvIdRef.current ||
@@ -168,14 +311,11 @@ export const App: React.FC = () => {
       switch (event.type) {
         case 'message.start':
           if (event.conversationId) {
-            // Adopt server-assigned ID for a new consultation
-            if (!activeConvIdRef.current) {
-              activeConvIdRef.current = event.conversationId;
-              setActiveConvId(event.conversationId);
-            }
+            activeConvIdRef.current = event.conversationId;
+            setActiveConvId(event.conversationId);
+            chatStorage.setActiveConvId(event.conversationId);
           }
 
-          // If this start event belongs to another conversation, refresh sidebar and ignore
           if (event.conversationId && event.conversationId !== activeConvIdRef.current) {
             refreshData();
             return;
@@ -183,11 +323,14 @@ export const App: React.FC = () => {
 
           setIsStreaming(true);
           setStatusText(undefined);
+          deltaQueueRef.current = '';
+          isStreamCompleteRef.current = false;
 
           if (event.messageId) {
+            const convId = event.conversationId || activeConvIdRef.current || '';
             const newAssistantMsg: Message = {
               id: event.messageId,
-              conversationId: event.conversationId || activeConvIdRef.current || '',
+              conversationId: convId,
               userId: user?.id || '',
               role: 'assistant',
               content: '',
@@ -196,17 +339,32 @@ export const App: React.FC = () => {
             };
 
             setMessages((prev) => {
-              // Update optimistic user message with the newly resolved conversationId
-              const updated = prev.map((m) =>
+              const updatedUserMsgs = prev.map((m) =>
                 m.conversationId === '' && event.conversationId
                   ? { ...m, conversationId: event.conversationId }
                   : m
               );
-              return [...updated, newAssistantMsg];
+              const updated = [...updatedUserMsgs, newAssistantMsg];
+              if (convId) {
+                chatStorage.saveMessages(convId, updated);
+                const firstUser = updatedUserMsgs.find((m) => m.role === 'user');
+                const title = firstUser?.content ? firstUser.content.slice(0, 42) : 'Legal Consultation';
+                chatStorage.saveConversation({
+                  id: convId,
+                  userId: user?.id || '',
+                  title,
+                  legalMode: activeMode,
+                  jurisdiction,
+                  aiProvider: provider,
+                  aiMode,
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                });
+              }
+              return updated;
             });
           }
 
-          // Instantly sync conversation list in sidebar
           refreshData();
           break;
 
@@ -218,17 +376,8 @@ export const App: React.FC = () => {
         case 'message.delta':
           if (!isCurrentConv) return;
           if (event.delta) {
-            setMessages((prev) => {
-              if (prev.length === 0) return prev;
-              const last = prev[prev.length - 1];
-              if (last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, content: last.content + event.delta },
-                ];
-              }
-              return prev;
-            });
+            deltaQueueRef.current += event.delta;
+            startTypewriter();
           }
           break;
 
@@ -240,10 +389,12 @@ export const App: React.FC = () => {
               const last = prev[prev.length - 1];
               if (last.role === 'assistant') {
                 const existing = last.sources || [];
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, sources: [...existing, event.source!] },
-                ];
+                const updatedLast: Message = { ...last, sources: [...existing, event.source!] };
+                const updated = [...prev.slice(0, -1), updatedLast];
+                if (last.conversationId) {
+                  chatStorage.saveMessages(last.conversationId, updated);
+                }
+                return updated;
               }
               return prev;
             });
@@ -252,39 +403,52 @@ export const App: React.FC = () => {
 
         case 'message.complete':
           if (isCurrentConv) {
-            setIsStreaming(false);
-            setStatusText(undefined);
-            setMessages((prev) => {
-              if (prev.length === 0) return prev;
-              const last = prev[prev.length - 1];
-              if (last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  {
+            completeUsageUnitsRef.current = event.usageUnits;
+            isStreamCompleteRef.current = true;
+            if (!typewriterTimerRef.current && deltaQueueRef.current.length === 0) {
+              setIsStreaming(false);
+              setStatusText(undefined);
+              setMessages((prev) => {
+                if (prev.length === 0) return prev;
+                const last = prev[prev.length - 1];
+                if (last.role === 'assistant') {
+                  const completedMsg: Message = {
                     ...last,
                     status: 'completed',
                     usageUnits: event.usageUnits,
-                  },
-                ];
-              }
-              return prev;
-            });
+                  };
+                  const updated = [...prev.slice(0, -1), completedMsg];
+                  if (last.conversationId) {
+                    chatStorage.saveMessages(last.conversationId, updated);
+                  }
+                  return updated;
+                }
+                return prev;
+              });
+              refreshData();
+            } else {
+              startTypewriter();
+            }
+          } else {
+            refreshData();
           }
-          refreshData();
           break;
 
         case 'message.error':
           if (isCurrentConv) {
+            stopTypewriter();
             setIsStreaming(false);
             setStatusText(undefined);
             setMessages((prev) => {
               if (prev.length === 0) return prev;
               const last = prev[prev.length - 1];
               if (last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, status: 'failed' },
-                ];
+                const failedMsg: Message = { ...last, status: 'failed' };
+                const updated = [...prev.slice(0, -1), failedMsg];
+                if (last.conversationId) {
+                  chatStorage.saveMessages(last.conversationId, updated);
+                }
+                return updated;
               }
               return prev;
             });
@@ -294,16 +458,19 @@ export const App: React.FC = () => {
 
         case 'message.cancel':
           if (isCurrentConv) {
+            stopTypewriter();
             setIsStreaming(false);
             setStatusText(undefined);
             setMessages((prev) => {
               if (prev.length === 0) return prev;
               const last = prev[prev.length - 1];
               if (last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, status: 'cancelled' },
-                ];
+                const cancelledMsg: Message = { ...last, status: 'cancelled' };
+                const updated = [...prev.slice(0, -1), cancelledMsg];
+                if (last.conversationId) {
+                  chatStorage.saveMessages(last.conversationId, updated);
+                }
+                return updated;
               }
               return prev;
             });
@@ -314,15 +481,15 @@ export const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [user, refreshData]);
+  }, [user, refreshData, startTypewriter, stopTypewriter, activeMode, jurisdiction, provider, aiMode]);
 
   // Handlers
   const handleSendMessage = (text: string, mode: LegalMode, attachedDocs: Document[]) => {
     if (!text.trim() && attachedDocs.length === 0) return;
 
+    stopTypewriter();
     const currentConvId = activeConvIdRef.current || activeConvId;
 
-    // Optimistically add user message to list
     const userMsg: Message = {
       id: `usr_${Date.now()}`,
       conversationId: currentConvId || '',
@@ -341,11 +508,18 @@ export const App: React.FC = () => {
       mode,
       createdAt: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMsg]);
+
+    setMessages((prev) => {
+      const updated = [...prev, userMsg];
+      if (currentConvId) {
+        chatStorage.saveMessages(currentConvId, updated);
+      }
+      return updated;
+    });
+
     setIsStreaming(true);
     setStatusText('Counsel is reviewing legal context...');
 
-    // Dispatch over WebSocket with guaranteed active conversation ID
     const docIds = attachedDocs.map((d) => d.id);
     const allImages = attachedDocs.flatMap((d) => d.pageImages || []).filter(Boolean);
     wsClient.send({
@@ -362,13 +536,28 @@ export const App: React.FC = () => {
   };
 
   const handleStopGenerating = () => {
+    stopTypewriter();
+    setIsStreaming(false);
+    setStatusText(undefined);
     const currentConvId = activeConvIdRef.current || activeConvId;
     if (currentConvId) {
       wsClient.cancel(currentConvId);
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev[prev.length - 1];
+        if (last.role === 'assistant' && last.status === 'streaming') {
+          const cancelledMsg: Message = { ...last, status: 'cancelled' };
+          const updated = [...prev.slice(0, -1), cancelledMsg];
+          chatStorage.saveMessages(currentConvId, updated);
+          return updated;
+        }
+        return prev;
+      });
     }
   };
 
   const handleNewConversation = useCallback(() => {
+    stopTypewriter();
     if (activeConvIdRef.current) {
       wsClient.cancel(activeConvIdRef.current);
     }
@@ -376,10 +565,11 @@ export const App: React.FC = () => {
     setStatusText(undefined);
     activeConvIdRef.current = null;
     setActiveConvId(null);
+    chatStorage.setActiveConvId(null);
     setMessages([]);
     setActiveMode('general');
     setPresetPrompt(undefined);
-  }, []);
+  }, [stopTypewriter]);
 
   const handleRequestDeleteConversation = (id: string) => {
     const target = conversations.find((c) => c.id === id);
@@ -389,9 +579,11 @@ export const App: React.FC = () => {
   const handleConfirmDeleteConversation = async () => {
     if (!conversationToDelete) return;
     setIsDeletingChat(true);
+    const deleteId = conversationToDelete.id;
     try {
-      await api.deleteConversation(conversationToDelete.id);
-      if (activeConvId === conversationToDelete.id) {
+      chatStorage.deleteStoredConversation(deleteId);
+      await api.deleteConversation(deleteId).catch(() => {});
+      if (activeConvId === deleteId) {
         handleNewConversation();
       }
       refreshData();
@@ -428,6 +620,8 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
     setMessages([userMsg]);
+    setIsStreaming(true);
+    setStatusText('Counsel is reviewing comparison context...');
 
     wsClient.send({
       type: 'message.send',
@@ -455,6 +649,8 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
     setMessages([userMsg]);
+    setIsStreaming(true);
+    setStatusText('Counsel is preparing lawyer consultation briefing...');
 
     wsClient.send({
       type: 'message.send',
