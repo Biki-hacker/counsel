@@ -15,11 +15,15 @@
       "destination": "/api/index.go"
     },
     {
+      "source": "/ws/(.*)",
+      "destination": "/api/index.go"
+    },
+    {
       "source": "/healthz",
       "destination": "/api/index.go"
     },
     {
-      "source": "/((?!api/|healthz).*)",
+      "source": "/((?!api/|ws/|healthz).*)",
       "destination": "/index.html"
     }
   ]

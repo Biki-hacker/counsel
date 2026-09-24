@@ -12,11 +12,24 @@ class CounselWebSocketClient {
   private pingInterval: any = null;
   private isExplicitlyClosed = false;
   private sseAbortController: AbortController | null = null;
+  private webSocketDisabled = false;
+
+  private isServerless(): boolean {
+    if (typeof window === 'undefined') return false;
+    const hostname = window.location.hostname || '';
+    return hostname.endsWith('.vercel.app') || hostname.includes('vercel');
+  }
 
   connect(token: string) {
     const tokenChanged = this.token !== token;
     this.token = token;
     this.isExplicitlyClosed = false;
+
+    // In serverless environments (e.g. Vercel), WebSockets are not supported.
+    // Seamlessly operate in direct HTTP SSE streaming mode and avoid failing WebSocket handshakes.
+    if (this.isServerless() || this.webSocketDisabled) {
+      return;
+    }
 
     if (this.ws) {
       if (tokenChanged) {
@@ -51,6 +64,11 @@ class CounselWebSocketClient {
 
       this.ws.onclose = () => {
         this.stopPing();
+        // If connection fails during handshake multiple times, disable to avoid spam
+        if (this.reconnectAttempts >= 2) {
+          this.webSocketDisabled = true;
+          return;
+        }
         if (!this.isExplicitlyClosed) {
           this.scheduleReconnect();
         }
@@ -62,7 +80,7 @@ class CounselWebSocketClient {
         }
       };
     } catch {
-      this.scheduleReconnect();
+      this.webSocketDisabled = true;
     }
   }
 

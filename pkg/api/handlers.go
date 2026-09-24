@@ -515,11 +515,7 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeJSONError(w, http.StatusInternalServerError, "STREAMING_UNSUPPORTED", "Streaming is not supported by this server/client environment")
-		return
-	}
+	flusher, _ := w.(http.Flusher)
 
 	var req websocket.ClientEnvelope
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -694,7 +690,9 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		_, err = fmt.Fprintf(w, "data: %s\n\n", bytes)
-		flusher.Flush()
+		if flusher != nil {
+			flusher.Flush()
+		}
 		return err
 	}
 
