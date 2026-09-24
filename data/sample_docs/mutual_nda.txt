@@ -1,0 +1,16 @@
+MUTUAL NON-DISCLOSURE AGREEMENT (NDA)
+
+Parties: Solaria Systems Inc. and Vertex Consulting Group LLC
+Effective Date: February 10, 2025
+
+1. DEFINITION OF CONFIDENTIAL INFORMATION
+"Confidential Information" encompasses all proprietary data, architecture designs, source code, financial projections, client records, and algorithm specifications disclosed in writing, orally, or by inspection of tangible items.
+
+2. STANDARD OF PROTECTION
+Receiving Party agrees to exercise a degree of care no less than reasonable care, and no less than the degree of care it exercises in protecting its own highly confidential assets.
+
+3. PERPETUAL SURVIVAL OF TRADE SECRETS
+The confidentiality obligations concerning proprietary software codebases, cryptographic protocols, and core algorithms shall continue in perpetuity indefinitely beyond termination of this agreement.
+
+4. REMEDIES AND INJUNCTIVE RELIEF
+Unauthorized disclosure or use will cause irreparable harm for which damages are inadequate. Disclosing Party is entitled to seek immediate injunctive relief from any court of competent jurisdiction without the requirement of posting a bond.

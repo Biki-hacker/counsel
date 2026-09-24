@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd web && npm install && npm run build",
+  "outputDirectory": "web/dist",
+  "framework": "vite",
+  "functions": {
+    "api/index.go": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.go"
+    },
+    {
+      "source": "/healthz",
+      "destination": "/api/index.go"
+    },
+    {
+      "source": "/((?!api/|healthz).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

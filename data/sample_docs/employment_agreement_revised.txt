@@ -1,0 +1,25 @@
+EMPLOYMENT AGREEMENT (REVISED AMENDMENT)
+
+This Revised Employment Agreement updates and replaces the prior agreement between Apex Technologies Inc. ("Employer") and Jane Doe ("Employee").
+
+1. POSITION AND DUTIES
+Employee continues as Principal Software Engineer.
+
+2. COMPENSATION AND BENEFITS
+(a) Annual base salary is revised to $175,000.
+(b) Annual bonus is converted to purely discretionary status; no metrics or guaranteed eligibility apply.
+(c) Paid vacation is reduced to 15 days per calendar year.
+
+3. TERM AND TERMINATION
+(a) Resignation by Employee requires sixty (60) days' prior written notice.
+(b) Employer may terminate employment for convenience with only fourteen (14) days' written notice.
+(c) Severance pay is conditioned upon Employee executing a comprehensive waiver of all statutory claims.
+
+4. EXPANDED NON-COMPETITION AND NON-SOLICITATION
+For twenty-four (24) months post-termination, Employee shall not directly or indirectly work for, consult with, or advise any competitive software, cloud, or AI technology entity worldwide.
+
+5. INDEMNIFICATION AND UNLIMITED LIABILITY
+Employee shall indemnify, defend, and hold harmless Employer against any third-party claims, legal fees, and operational losses arising from code authored or committed by Employee, without limitation of liability.
+
+6. MANDATORY BINDING ARBITRATION
+All disputes, controversies, or claims arising out of this agreement shall be submitted to confidential, binding arbitration in New York. Employee explicitly waives any right to trial by jury or participation in class-action proceedings.

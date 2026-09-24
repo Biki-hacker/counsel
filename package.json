@@ -1,0 +1,9 @@
+{
+  "name": "counsel",
+  "private": true,
+  "scripts": {
+    "build": "cd web && npm run build",
+    "test": "cd web && npm run test",
+    "dev": "cd web && npm run dev"
+  }
+}

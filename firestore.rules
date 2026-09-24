@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Counsel enforces all authorization server-side through the Go API layer.
+    // Direct client access is locked down by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

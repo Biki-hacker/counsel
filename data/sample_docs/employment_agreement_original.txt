@@ -1,0 +1,28 @@
+EMPLOYMENT AGREEMENT (ORIGINAL)
+
+This Employment Agreement is entered into on January 15, 2025 between Apex Technologies Inc. ("Employer") and Jane Doe ("Employee").
+
+1. POSITION AND DUTIES
+Employee shall serve as Senior Software Engineer and report to the VP of Engineering. Employee shall devote full business time and best efforts to the performance of duties.
+
+2. COMPENSATION AND BENEFITS
+(a) Employer agrees to pay Employee an annual base salary of $160,000, payable semi-monthly.
+(b) Employee is eligible for an annual performance bonus of up to 15% of base salary, based on documented KPIs.
+(c) Employee shall receive standard health insurance, 401(k) matching up to 4%, and 20 days of paid vacation.
+
+3. TERM AND TERMINATION
+(a) Employment is at-will. Either party may terminate this agreement at any time upon thirty (30) days' prior written notice.
+(b) Employer may terminate immediately for Cause, defined as conviction of a felony, gross insubordination, or material breach of company policy.
+(c) Upon termination without cause by Employer, Employee shall receive two (2) months of severance pay.
+
+4. INTELLECTUAL PROPERTY ASSIGNMENT
+All inventions, patents, codebases, designs, and documentation developed during employment relating to Employer's business shall belong solely to Employer.
+
+5. NON-COMPETITION AND NON-SOLICITATION
+During employment and for six (6) months following departure, Employee shall not solicit Employer's existing enterprise customers or actively recruit Employer's technical personnel.
+
+6. CONFIDENTIALITY
+Employee agrees to hold all proprietary trade secrets, unreleased features, and financial reports in strict confidence during and after employment.
+
+7. GOVERNING LAW AND JURISDICTION
+This agreement shall be governed by the laws of California. Any unresolved disputes shall proceed to non-binding mediation prior to any court action.
