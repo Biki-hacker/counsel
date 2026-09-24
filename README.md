@@ -1,4 +1,4 @@
-# Counsel — AI-Powered Legal Understanding & Preparation Assistant
+# Counsel - AI-Powered Legal Understanding & Preparation Assistant
 
 > **"Understand the law. Know your next step."**
 
@@ -58,44 +58,37 @@ Counsel strictly and transparently separates guidance into 4 clear categories:
 ---
 
 ## 🏗️ Architecture & Dual-Transport
-
+ 
 Counsel is architected as a **unified monorepo** with a **dual-transport design**:
-
-```mermaid
-flowchart TD
-    subgraph Client["React 19 + TypeScript Frontend (web/)"]
-        UI["Modern Web Interface"]
-        DTC["Dual-Transport Client (api/ws.ts)"]
-        UI --> DTC
-    end
-
-    subgraph DeployOptions["Deployment Transports"]
-        VercelEnv["Vercel Serverless (Monorepo)"]
-        DockerEnv["Container / VPS / Cloud Run"]
-    end
-
-    subgraph Backend["Go 1.22 Subsystems"]
-        VercelHandler["api/index.go (Handler)"]
-        ServerHandler["cmd/server/main.go"]
-        Router["internal/api/router.go"]
-        AuthSub["Auth Verifier & Canonical Identity"]
-        RateLimiter["Weighted Limiter (Upstash Redis / Memory)"]
-        Store["Persistence Store (Firestore / Memory)"]
-        OpenRouter["Dual-Key AI Subsystem & Circuit Breaker"]
-        DocEngine["PDF & Document Extraction Engine"]
-    end
-
-    DTC -->|"HTTP SSE: POST /api/v1/chat/stream"| VercelEnv
-    DTC -->|"WebSocket: /ws/chat"| DockerEnv
-
-    VercelEnv --> VercelHandler --> Router
-    DockerEnv --> ServerHandler --> Router
-
-    Router --> AuthSub
-    Router --> RateLimiter
-    Router --> Store
-    Router --> OpenRouter
-    Router --> DocEngine
+ 
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    React 19 + TypeScript Frontend (web/)                    │
+│   (Dual-Transport Client: WebSocket with Automatic HTTP SSE Fallback)       │
+└───────────────────────┬─────────────────────────────▲───────────────────────┘
+                        │                             │
+          ┌─────────────┴─────────────────────────────┴─────────────┐
+          │                                                         │
+   [On Vercel Serverless]                                  [On Standalone Server]
+          │                                                         │
+          ▼                                                         ▼
+HTTP Server-Sent Events (SSE)                             Persistent WebSocket
+  POST /api/v1/chat/stream                                      /ws/chat
+          │                                                         │
+          ▼                                                         ▼
+     api/index.go                                          cmd/server/main.go
+(Vercel Serverless Function)                               (Go HTTP + WS Server)
+          │                                                         │
+          └───────────────────────────┬─────────────────────────────┘
+                                      ▼
+                           internal/api/router.go
+                                      │
+          ┌───────────────────────────┼─────────────────────────────┐
+          ▼                           ▼                             ▼
+┌───────────────────┐       ┌───────────────────┐       ┌───────────────────┐
+│ Auth & Canonical  │       │ Weighted Limiter  │       │ OpenRouter Dual   │
+│ Identity Verifier │       │ (Upstash / Memory)│       │ AI Gateway Engine │
+└───────────────────┘       └───────────────────┘       └───────────────────┘
 ```
 
 ### Transport Comparison

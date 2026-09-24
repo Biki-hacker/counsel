@@ -150,7 +150,7 @@ func (cm *ContextManager) BuildContextWithImages(
 	if summary != "" {
 		messages = append(messages, ChatMessage{
 			Role:    "system",
-			Content: fmt.Sprintf("[PRIOR CONVERSATION CONTEXT & FACT SUMMARY]\nThe user and Counsel previously established the following facts and legal points:\n%s\n[END PRIOR CONTEXT — Resume normal conversation using these facts]", summary),
+			Content: fmt.Sprintf("[PRIOR CONVERSATION CONTEXT & FACT SUMMARY]\nThe user and Counsel previously established the following facts and legal points:\n%s\n[END PRIOR CONTEXT - Resume normal conversation using these facts]", summary),
 		})
 	}
 
