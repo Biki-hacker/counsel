@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Message } from '../../types';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { SourceCard } from './SourceCard';
-import { Copy, Check, RefreshCw, AlertCircle, Scale, FileText } from 'lucide-react';
+import { Copy, Check, RefreshCw, AlertCircle, Scale, FileText, Sparkles } from 'lucide-react';
 
 function formatFileSize(bytes?: number): string {
   if (!bytes || bytes <= 0) return '';
@@ -196,31 +196,29 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, statusTex
         ) : (
           <div>
             {message.status === 'streaming' && !message.content && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  color: 'var(--text-secondary)',
-                  fontSize: '13.5px',
-                  fontStyle: 'italic',
-                  padding: '0.5rem 0',
-                }}
-              >
-                <div
-                  style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--accent)',
-                    animation: 'pulse 1.2s infinite ease-in-out',
-                  }}
-                />
-                <span>{statusText || 'Analyzing document provisions...'}</span>
+              <div className="typing-bubble-wrapper">
+                <div className="typing-bubble" aria-label="Counsel is typing...">
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </div>
+                {statusText && (
+                  <div className="typing-status-pill">
+                    <Sparkles size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                    <span>{statusText}</span>
+                  </div>
+                )}
               </div>
             )}
 
-            {message.content && <MarkdownRenderer content={message.content} />}
+            {message.content && (
+              <div style={{ position: 'relative' }}>
+                <MarkdownRenderer content={message.content} />
+                {message.status === 'streaming' && (
+                  <span className="streaming-cursor" aria-hidden="true" />
+                )}
+              </div>
+            )}
 
             {message.status === 'failed' && (
               <div

@@ -299,5 +299,35 @@ describe('Counsel Frontend Component Suite', () => {
     // Prompt content should also be rendered
     expect(screen.getByText('Please summarize the liability clauses in this agreement.')).toBeDefined();
   });
+
+  it('renders Instagram/WhatsApp typing animation bubble while streaming response', () => {
+    const streamingAssistantMessage = {
+      id: 'msg_stream_1',
+      conversationId: 'conv_1',
+      userId: 'usr_1',
+      role: 'assistant' as const,
+      content: '',
+      status: 'streaming' as const,
+      createdAt: new Date().toISOString(),
+    };
+
+    const { container } = render(
+      <MessageBubble
+        message={streamingAssistantMessage}
+        statusText="Counsel is reviewing relevant legal clauses..."
+      />
+    );
+
+    // Verify typing bubble wrapper and bouncing dots
+    const bubble = container.querySelector('.typing-bubble');
+    expect(bubble).toBeDefined();
+    expect(bubble?.getAttribute('aria-label')).toBe('Counsel is typing...');
+
+    const dots = container.querySelectorAll('.typing-dot');
+    expect(dots.length).toBe(3);
+
+    // Verify status text pill is displayed
+    expect(screen.getByText('Counsel is reviewing relevant legal clauses...')).toBeDefined();
+  });
 });
 

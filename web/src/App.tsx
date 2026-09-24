@@ -342,6 +342,8 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
+    setIsStreaming(true);
+    setStatusText('Counsel is reviewing legal context...');
 
     // Dispatch over WebSocket with guaranteed active conversation ID
     const docIds = attachedDocs.map((d) => d.id);
@@ -503,6 +505,8 @@ export const App: React.FC = () => {
         <ConversationArea
           messages={messages}
           statusText={statusText}
+          isStreaming={isStreaming}
+          activeMode={activeMode}
           onSelectAction={(p, m) => {
             setActiveMode(m);
             setPresetPrompt(p);

@@ -2,10 +2,13 @@ import React, { useRef, useEffect } from 'react';
 import { Message, LegalMode } from '../../types';
 import { MessageBubble } from './MessageBubble';
 import { EmptyState } from './EmptyState';
+import { TypingIndicator } from './TypingIndicator';
 
 interface ConversationAreaProps {
   messages: Message[];
   statusText?: string;
+  isStreaming?: boolean;
+  activeMode?: string;
   onSelectAction: (prompt: string, mode: LegalMode) => void;
   onOpenCompare: () => void;
   onOpenLawyerPrep: () => void;
@@ -15,6 +18,8 @@ interface ConversationAreaProps {
 export const ConversationArea: React.FC<ConversationAreaProps> = ({
   messages,
   statusText,
+  isStreaming,
+  activeMode,
   onSelectAction,
   onOpenCompare,
   onOpenLawyerPrep,
@@ -22,9 +27,14 @@ export const ConversationArea: React.FC<ConversationAreaProps> = ({
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const isWaitingForAssistant =
+    isStreaming &&
+    messages.length > 0 &&
+    messages[messages.length - 1].role === 'user';
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, statusText]);
+  }, [messages, statusText, isStreaming]);
 
   if (messages.length === 0) {
     return (
@@ -70,6 +80,9 @@ export const ConversationArea: React.FC<ConversationAreaProps> = ({
             onRetry={onRetry}
           />
         ))}
+        {isWaitingForAssistant && (
+          <TypingIndicator statusText={statusText || 'Counsel is typing...'} mode={activeMode} />
+        )}
         <div ref={bottomRef} style={{ height: '1px' }} />
       </div>
     </div>
