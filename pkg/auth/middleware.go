@@ -18,14 +18,10 @@ func Middleware(verifier *Verifier, manager *CanonicalAuthManager) func(http.Han
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenStr := r.Header.Get("Authorization")
 			if tokenStr == "" {
-				// Also check query param ?token= (useful for browser events / initial handshake)
-				tokenStr = r.URL.Query().Get("token")
-			}
-
-			if tokenStr == "" {
-				httpError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Missing authorization token")
+				httpError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Missing authorization header")
 				return
 			}
+
 
 			payload, err := verifier.VerifyToken(r.Context(), tokenStr)
 			if err != nil {

@@ -17,7 +17,8 @@ interface MessageBubbleProps {
   onRetry?: () => void;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, statusText, onRetry }) => {
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ message, statusText, onRetry }) => {
+
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
@@ -303,3 +304,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, statusTex
     </div>
   );
 };
+
+export const MessageBubble = React.memo(MessageBubbleComponent);
+

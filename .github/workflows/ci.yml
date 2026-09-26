@@ -27,7 +27,8 @@ jobs:
         run: go test -v -count=1 -short ./...
 
       - name: Run Go Benchmarks
-        run: go test -run=^$ -bench=. -benchmem ./pkg/cache/...
+        run: go test -run=^$ -bench=. -benchmem ./...
+
 
   frontend-test:
     name: Frontend Build & Test Suite

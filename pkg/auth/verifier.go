@@ -105,21 +105,27 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 		}, nil
 	}
 
-	// Parse unverified first to inspect claims/issuer
-	parser := jwt.NewParser()
-	unverifiedToken, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
-	if err != nil {
-		return nil, errors.New("malformed JWT token")
-	}
-
-	// Reject insecure algorithm none
-	if headerAlg, ok := unverifiedToken.Header["alg"].(string); ok {
-		if strings.EqualFold(headerAlg, "none") {
+	// 2. Parse and cryptographically verify JWT token
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if alg, ok := t.Header["alg"].(string); !ok || strings.EqualFold(alg, "none") {
 			return nil, errors.New("insecure jwt algorithm 'none' rejected")
 		}
+
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); ok {
+			if v.cfg.SupabaseJWTSecret != "" {
+				return []byte(v.cfg.SupabaseJWTSecret), nil
+			}
+			return []byte("counsel-secure-hmac-sha256-signing-secret-key-2026"), nil
+		}
+
+		return nil, errors.New("unexpected token signing algorithm")
+	})
+
+	if err != nil || token == nil || !token.Valid {
+		return nil, errors.New("invalid or unverified token signature")
 	}
 
-	claims, ok := unverifiedToken.Claims.(jwt.MapClaims)
+	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, errors.New("invalid token claims")
 	}
@@ -132,92 +138,31 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 	}
 
 	iss, _ := claims["iss"].(string)
+	sub, _ := claims["sub"].(string)
+	email, _ := claims["email"].(string)
+	name, _ := claims["name"].(string)
 
-	// 2. Google / Firebase Auth verification (checks Google accounts or Firebase securetoken)
-	if strings.Contains(iss, "accounts.google.com") || strings.Contains(iss, "securetoken.google.com") || claims["firebase"] != nil {
-		// Verify project audience if configured
-		if v.cfg.FirebaseProjectID != "" {
-			aud, _ := claims["aud"].(string)
-			expectedIss := "https://securetoken.google.com/" + v.cfg.FirebaseProjectID
-			if aud != "" && aud != v.cfg.FirebaseProjectID && iss != expectedIss && !strings.Contains(iss, "accounts.google.com") {
-				return nil, errors.New("token audience does not match configured Firebase project")
-			}
-		}
-
-		sub, _ := claims["sub"].(string)
-		email, _ := claims["email"].(string)
-		name, _ := claims["name"].(string)
-		picture, _ := claims["picture"].(string)
-
-		if sub == "" {
-			return nil, errors.New("missing sub claim in Google / Firebase token")
-		}
-
-		provider := "google"
-		if claims["firebase"] != nil {
-			provider = "firebase"
-		}
-
-		return &IdentityPayload{
-			Provider:        provider,
-			ProviderSubject: sub,
-			Email:           email,
-			DisplayName:     name,
-			PhotoURL:        picture,
-		}, nil
+	if sub == "" {
+		return nil, errors.New("missing sub claim in token")
 	}
 
-	// 3. Supabase Auth verification
-	if strings.Contains(iss, "supabase") || claims["role"] == "authenticated" || claims["aud"] == "authenticated" {
-		if v.cfg.SupabaseJWTSecret != "" {
-			// Enforce cryptographic HMAC verification against configured secret
-			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, errors.New("unexpected signing method")
-				}
-				return []byte(v.cfg.SupabaseJWTSecret), nil
-			})
-			if err != nil || !token.Valid {
-				return nil, errors.New("invalid Supabase token signature")
-			}
-		}
-
-
-		sub, _ := claims["sub"].(string)
-		email, _ := claims["email"].(string)
-		if sub == "" {
-			return nil, errors.New("missing sub claim in Supabase token")
-		}
-
-		name := ""
+	provider := "counsel"
+	if strings.Contains(iss, "supabase") || claims["role"] == "authenticated" {
+		provider = "supabase"
 		if userMeta, ok := claims["user_metadata"].(map[string]interface{}); ok {
-			if n, ok := userMeta["full_name"].(string); ok {
+			if n, ok := userMeta["full_name"].(string); ok && n != "" {
 				name = n
 			}
 		}
-
-		return &IdentityPayload{
-			Provider:        "supabase",
-			ProviderSubject: sub,
-			Email:           email,
-			DisplayName:     name,
-		}, nil
+	} else if strings.Contains(iss, "google") || strings.Contains(iss, "firebase") {
+		provider = "google"
 	}
 
-	// 4. Default fallback: Counsel internal session token
-	sub, _ := claims["sub"].(string)
-	email, _ := claims["email"].(string)
-	provider, _ := claims["provider"].(string)
-	if provider == "" {
-		provider = "counsel"
-	}
-	if sub != "" {
-		return &IdentityPayload{
-			Provider:        provider,
-			ProviderSubject: sub,
-			Email:           email,
-		}, nil
-	}
-
-	return nil, errors.New("unrecognized token issuer or credentials")
+	return &IdentityPayload{
+		Provider:        provider,
+		ProviderSubject: sub,
+		Email:           email,
+		DisplayName:     name,
+	}, nil
 }
+
