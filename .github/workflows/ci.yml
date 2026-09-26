@@ -51,7 +51,15 @@ jobs:
         run: npm ci
 
       - name: Run Vitest Unit Tests
-        run: npm run test
+        run: |
+          npm run test 2>&1 | tee vitest.log || {
+            echo "## Vitest Run Failure" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            cat vitest.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          }
 
       - name: TypeScript & Production Bundle Build
         run: npm run build
+
