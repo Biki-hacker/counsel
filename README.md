@@ -12,6 +12,32 @@ Counsel transforms complex, intimidating legal contracts, clauses, and disputes 
 
 ---
 
+## 🎯 Problem Statement Alignment: AI for Legal Assistance & Access
+
+> **Challenge**: *Legal information can often be complex, difficult to understand, and challenging to navigate without professional assistance. Build a GenAI-powered solution that makes legal information and basic legal assistance more accessible by helping users understand, compare, and navigate legal documents and information.*
+
+Counsel was engineered specifically to solve this problem across all dimensions, transforming passive, intimidating legal documents into interactive, actionable understanding:
+
+| Problem Statement Use Case | How Counsel Solves It |
+| :--- | :--- |
+| **Simplifying complex legal documents** | **Clause Deep-Dive & Document Review**: Deconstructs convoluted legal text into plain-English explanations, detailing obligations, rights, affected parties, and practical meanings without legalese. |
+| **Comparing contracts, agreements, or policies** | **Agreement Comparison Mode**: Performs side-by-side variance analysis across versions, highlighting executive differences, newly introduced burdens, removed protections, and shifted liabilities. |
+| **Highlighting important clauses, obligations, risks, or inconsistencies** | **Attention Matrix & Risk Auditor**: Flags clauses by risk priority (*High Attention*, *Worth Reviewing*, *Informational*), detects restrictive covenants, ambiguity traps, and cross-clause inconsistencies. |
+| **Answering questions based on provided legal documents** | **Document Intelligence & Grounded Citations**: Ingests legal PDFs and plain text, allowing conversational Q&A where every answer is anchored with explicit clause and page citations (e.g., `[Source: Page 3, Section 7.2]`). |
+| **Helping users understand their options and potential next steps** | **Procedural Navigation & Next Steps Engine**: Outlines realistic options, statutory avenues, and procedural roadmaps across Contract, Civil, and Criminal domains. |
+| **Generating summaries, checklists, or other actionable outputs** | **Structured Actionable Deliverables**: Generates high-level executive summaries, due-diligence checklists, evidence preservation guides, and critical timeline milestones. |
+| **Helping users prepare information or questions for a legal professional** | **"Prepare for a Lawyer" Mode**: Synthesizes messy legal narratives and documents into professional lawyer briefing memos featuring verified facts, chronological timelines, identified ambiguities, and high-value questions for counsel. |
+| **Ethical Assistance vs. Legal Advice** | **The 4 Pillars of Distinction**: Strictly adheres to the ethical guideline that AI provides informative assistance rather than replacing licensed legal counsel. Transparently separates plain-English explanation, risk interpretation, jurisdictional possibility, and recommendations for licensed attorney verification. |
+
+### 💡 Innovative & Out-of-the-Box Capabilities
+Beyond the baseline use cases, Counsel explores the problem space with novel architectural and functional innovations:
+* **Multi-Jurisdiction Context Engine**: Contextually tailors legal principles to statutory frameworks in **India** (Indian Contract Act 1872, BNSS, Consumer Protection Act), the **United States** (UCC, At-Will doctrine), the **United Kingdom** (Statutory Rights, Common Law), and the **European Union** (GDPR, Civil Code).
+* **Dual-Transport Architecture**: High-speed HTTP Server-Sent Events (SSE) for serverless Vercel edge deployment combined with persistent WebSockets for containerized instances.
+* **Prompt Injection Defense Barrier**: Enforces a secure `<untrusted_document>` parsing perimeter to defend against prompt injection embedded within malicious legal contracts.
+* **Dual-Key Circuit Breaker AI Gateway**: High-availability AI router leveraging both reasoning/thinking models (Gemma 31B Thinking, Nemotron 550B Ultra) and fast models with automatic failover.
+
+---
+
 ## 🏛️ Core Product Principles & Ethical Boundaries
 
 Counsel is an **AI-powered legal understanding and preparation assistant**. 
