@@ -121,10 +121,21 @@ func detectSectionHeading(text string) string {
 	return ""
 }
 
+// sanitizeUntrustedContent neutralizes XML breakout tags to prevent prompt injection escapes.
+func sanitizeUntrustedContent(s string) string {
+	s = strings.ReplaceAll(s, "</untrusted_document>", "&lt;/untrusted_document&gt;")
+	s = strings.ReplaceAll(s, "<untrusted_document", "&lt;untrusted_document")
+	s = strings.ReplaceAll(s, "</chunk>", "&lt;/chunk&gt;")
+	s = strings.ReplaceAll(s, "<chunk", "&lt;chunk")
+	return s
+}
+
 // FormatContextAsUntrustedData formats chunks into protected XML for LLM grounding.
 func FormatContextAsUntrustedData(docName, docID string, chunks []models.DocumentChunk, maxTokens int) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<untrusted_document name=\"%s\" id=\"%s\">\n", docName, docID))
+	cleanName := strings.ReplaceAll(strings.ReplaceAll(docName, "\"", "&quot;"), ">", "&gt;")
+	cleanID := strings.ReplaceAll(strings.ReplaceAll(docID, "\"", "&quot;"), ">", "&gt;")
+	sb.WriteString(fmt.Sprintf("<untrusted_document name=\"%s\" id=\"%s\">\n", cleanName, cleanID))
 
 	totalTokens := 0
 	for _, chunk := range chunks {
@@ -133,13 +144,15 @@ func FormatContextAsUntrustedData(docName, docID string, chunks []models.Documen
 			break
 		}
 
+		cleanSection := strings.ReplaceAll(strings.ReplaceAll(chunk.SectionTitle, "\"", "&quot;"), ">", "&gt;")
 		sb.WriteString(fmt.Sprintf("  <chunk page=\"%d\"", chunk.PageNumber))
-		if chunk.SectionTitle != "" {
-			sb.WriteString(fmt.Sprintf(" section=\"%s\"", chunk.SectionTitle))
+		if cleanSection != "" {
+			sb.WriteString(fmt.Sprintf(" section=\"%s\"", cleanSection))
 		}
 		sb.WriteString(">\n")
 		sb.WriteString("    ")
-		sb.WriteString(strings.ReplaceAll(chunk.Content, "\n", "\n    "))
+		sanitizedContent := sanitizeUntrustedContent(chunk.Content)
+		sb.WriteString(strings.ReplaceAll(sanitizedContent, "\n", "\n    "))
 		sb.WriteString("\n  </chunk>\n")
 
 		totalTokens += chunk.TokenEstimate
@@ -148,3 +161,4 @@ func FormatContextAsUntrustedData(docName, docID string, chunks []models.Documen
 	sb.WriteString("</untrusted_document>\n")
 	return sb.String()
 }
+

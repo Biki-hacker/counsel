@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -39,9 +40,23 @@ func NewOpenRouterClient(cfg *config.Config, cb *KeyCircuitBreaker) *OpenRouterC
 		circuitBreaker: cb,
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second, // Allow extended streaming time
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				DialContext: (&net.Dialer{
+					Timeout:   15 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).DialContext,
+				MaxIdleConns:          100,
+				MaxIdleConnsPerHost:   20,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				ForceAttemptHTTP2:     true,
+			},
 		},
 	}
 }
+
 
 type chatMessage struct {
 	Role    string `json:"role"`

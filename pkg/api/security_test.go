@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -152,5 +151,55 @@ func TestSecurityAndDataIsolation(t *testing.T) {
 	}
 }
 
-// Suppress unused imports
-var _ = bytes.NewReader
+func TestSecurityHeadersAndCORS(t *testing.T) {
+	cfg := config.Load()
+	cfg.AllowedOrigins = []string{"http://localhost:5173", "https://counsel.law"}
+	s := store.NewMemoryStore()
+	limiter := ratelimit.NewMemoryLimiter(cfg, s)
+	verifier := auth.NewVerifier(cfg)
+	authMgr := auth.NewCanonicalAuthManager(s)
+
+	apiHandler := NewAPIHandler(cfg, s, limiter, verifier, authMgr, nil, nil, nil)
+	router := SetupRouter(cfg, apiHandler, nil, verifier, authMgr)
+
+	req := httptest.NewRequest("GET", "/healthz", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	// Verify OWASP Security Headers
+	if rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Errorf("Expected X-Content-Type-Options: nosniff")
+	}
+	if rec.Header().Get("X-Frame-Options") != "DENY" {
+		t.Errorf("Expected X-Frame-Options: DENY")
+	}
+	if rec.Header().Get("Content-Security-Policy") == "" {
+		t.Errorf("Expected Content-Security-Policy header to be present")
+	}
+	if rec.Header().Get("Strict-Transport-Security") == "" {
+		t.Errorf("Expected Strict-Transport-Security header to be present")
+	}
+	if rec.Header().Get("Permissions-Policy") == "" {
+		t.Errorf("Expected Permissions-Policy header to be present")
+	}
+	if rec.Header().Get("Access-Control-Allow-Origin") != "http://localhost:5173" {
+		t.Errorf("Expected CORS origin reflection for allowed origin")
+	}
+}
+
+func TestInsecureJWTAlgorithmNone(t *testing.T) {
+	cfg := config.Load()
+	verifier := auth.NewVerifier(cfg)
+
+	// Craft a JWT token with "alg": "none"
+	// Header: {"alg":"none","typ":"JWT"} -> eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0
+	// Payload: {"sub":"hacker","iss":"supabase","role":"authenticated"} -> eyJzdWIiOiJoYWNrZXIiLCJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0
+	tokenWithAlgNone := "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJoYWNrZXIiLCJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhdXRoZW50aWNhdGVkIn0."
+
+	_, err := verifier.VerifyToken(context.Background(), tokenWithAlgNone)
+	if err == nil {
+		t.Fatalf("Security failure: verifier accepted JWT token with alg: none!")
+	}
+}
+

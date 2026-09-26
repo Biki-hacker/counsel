@@ -112,6 +112,13 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 		return nil, errors.New("malformed JWT token")
 	}
 
+	// Reject insecure algorithm none
+	if headerAlg, ok := unverifiedToken.Header["alg"].(string); ok {
+		if strings.EqualFold(headerAlg, "none") {
+			return nil, errors.New("insecure jwt algorithm 'none' rejected")
+		}
+	}
+
 	claims, ok := unverifiedToken.Claims.(jwt.MapClaims)
 	if !ok {
 		return nil, errors.New("invalid token claims")
@@ -128,6 +135,15 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 
 	// 2. Google / Firebase Auth verification (checks Google accounts or Firebase securetoken)
 	if strings.Contains(iss, "accounts.google.com") || strings.Contains(iss, "securetoken.google.com") || claims["firebase"] != nil {
+		// Verify project audience if configured
+		if v.cfg.FirebaseProjectID != "" {
+			aud, _ := claims["aud"].(string)
+			expectedIss := "https://securetoken.google.com/" + v.cfg.FirebaseProjectID
+			if aud != "" && aud != v.cfg.FirebaseProjectID && iss != expectedIss && !strings.Contains(iss, "accounts.google.com") {
+				return nil, errors.New("token audience does not match configured Firebase project")
+			}
+		}
+
 		sub, _ := claims["sub"].(string)
 		email, _ := claims["email"].(string)
 		name, _ := claims["name"].(string)
@@ -154,19 +170,18 @@ func (v *Verifier) VerifyToken(ctx context.Context, tokenStr string) (*IdentityP
 	// 3. Supabase Auth verification
 	if strings.Contains(iss, "supabase") || claims["role"] == "authenticated" || claims["aud"] == "authenticated" {
 		if v.cfg.SupabaseJWTSecret != "" {
-			// If signed with HMAC, verify signature with secret
+			// Enforce cryptographic HMAC verification against configured secret
 			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, errors.New("unexpected signing method")
 				}
 				return []byte(v.cfg.SupabaseJWTSecret), nil
 			})
-			if err == nil && token.Valid {
-				// Signature valid
-			} else if claims["role"] != "authenticated" && claims["aud"] != "authenticated" {
+			if err != nil || !token.Valid {
 				return nil, errors.New("invalid Supabase token signature")
 			}
 		}
+
 
 		sub, _ := claims["sub"].(string)
 		email, _ := claims["email"].(string)

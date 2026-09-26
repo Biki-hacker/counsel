@@ -12,6 +12,7 @@ import (
 
 	"counsel/pkg/ai"
 	"counsel/pkg/auth"
+	"counsel/pkg/cache"
 	"counsel/pkg/config"
 	"counsel/pkg/documents"
 	"counsel/pkg/models"
@@ -32,6 +33,7 @@ type APIHandler struct {
 	promptBuilder  *ai.PromptBuilder
 	contextManager *ai.ContextManager
 	aiClient       *ai.OpenRouterClient
+	cache          *cache.MemoryCache
 }
 
 func NewAPIHandler(
@@ -65,11 +67,16 @@ func NewAPIHandler(
 		promptBuilder:  promptBuilder,
 		contextManager: ai.NewContextManager(),
 		aiClient:       aiClient,
+		cache:          cache.NewMemoryCache(1000),
 	}
 }
 
+
 // POST /api/v1/auth/session
 func (h *APIHandler) HandleAuthSession(w http.ResponseWriter, r *http.Request) {
+	// Limit request body to 64KB to prevent DoS attacks
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+
 	var req struct {
 		Token       string `json:"token"`
 		DisplayName string `json:"displayName,omitempty"`
@@ -127,6 +134,9 @@ func (h *APIHandler) HandleUpdateMe(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Not authenticated")
 		return
 	}
+
+	// Limit request body to 64KB
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 
 	var req struct {
 		DisplayName       string              `json:"displayName,omitempty"`
@@ -214,6 +224,9 @@ func (h *APIHandler) HandleCreateConversation(w http.ResponseWriter, r *http.Req
 		writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Not authenticated")
 		return
 	}
+
+	// Limit request body to 128KB
+	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 
 	var req struct {
 		Title        string              `json:"title"`
@@ -312,6 +325,9 @@ func (h *APIHandler) HandleUpdateConversation(w http.ResponseWriter, r *http.Req
 		writeJSONError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Not authenticated")
 		return
 	}
+
+	// Limit request body to 128KB
+	r.Body = http.MaxBytesReader(w, r.Body, 128<<10)
 
 	conv, err := h.store.GetConversation(r.Context(), convID)
 	if err != nil || conv.UserID != user.ID {
@@ -516,6 +532,9 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	flusher, _ := w.(http.Flusher)
+
+	// Limit request payload to 1 MB to prevent memory exhaustion DoS
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 
 	var req websocket.ClientEnvelope
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -756,6 +775,29 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 		ConversationID: conv.ID,
 	})
 
+	// Cache optimization: Check in-memory query cache for instant hits
+	cacheKey := cache.GenerateKey("chat", req.Prompt, string(conv.LegalMode), string(conv.Jurisdiction), strings.Join(req.DocumentIDs, ","))
+	if cachedDelta, ok := h.cache.Get(cacheKey); ok && cachedDelta != "" && len(pageImages) == 0 {
+		w.Header().Set("X-Cache", "HIT")
+		_ = sendEvent(&websocket.ServerEnvelope{
+			Type:      websocket.ServerEventDelta,
+			MessageID: assistantMsgID,
+			Delta:     cachedDelta,
+		})
+		assistantMsg.Content = cachedDelta
+		assistantMsg.Status = models.StatusCompleted
+		_ = h.store.UpdateMessage(ctx, assistantMsg)
+		_ = h.limiter.SettleUnits(ctx, user.ID, costUnits, 1)
+		_ = sendEvent(&websocket.ServerEnvelope{
+			Type:           websocket.ServerEventComplete,
+			MessageID:      assistantMsgID,
+			ConversationID: conv.ID,
+			UsageUnits:     1,
+		})
+		return
+	}
+	w.Header().Set("X-Cache", "MISS")
+
 	// 7. Assemble context-aware multi-turn messages
 	systemPrompt := h.promptBuilder.BuildSystemPrompt(conv.LegalMode, conv.Jurisdiction)
 	contextMessages := h.contextManager.BuildContextWithImages(
@@ -827,6 +869,10 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	finalContent := fullResponse.String()
 	assistantMsg.Content = finalContent
 	assistantMsg.Status = models.StatusCompleted
+
+	if len(pageImages) == 0 && finalContent != "" {
+		h.cache.Set(cacheKey, finalContent, 24*time.Hour)
+	}
 
 	if strings.Contains(finalContent, "Page ") || strings.Contains(finalContent, "Section ") {
 		assistantMsg.Sources = []models.SourceReference{
