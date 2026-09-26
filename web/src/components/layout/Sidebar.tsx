@@ -11,6 +11,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { Conversation, CanonicalUser } from '../../types';
+import { groupConversationsByDate } from '../../utils/chatStorage';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -186,85 +187,89 @@ export const Sidebar: React.FC<SidebarProps> = ({
             gap: '0.2rem',
           }}
         >
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              color: 'var(--text-muted)',
-              marginBottom: '0.35rem',
-              paddingLeft: '0.4rem',
-            }}
-          >
-            Recent Consultations
-          </span>
-
           {conversations.length === 0 ? (
             <p style={{ fontSize: '12.5px', color: 'var(--text-muted)', padding: '0.5rem 0.4rem' }}>
               No previous conversations.
             </p>
           ) : (
-            conversations.map((conv) => {
-              const isActive = conv.id === activeConversationId;
-              return (
-                <div
-                  key={conv.id}
+            groupConversationsByDate(conversations).map((group) => (
+              <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginBottom: '0.5rem' }}>
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0.45rem 0.55rem',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: isActive ? 'var(--surface-raised)' : 'transparent',
-                    border: isActive ? '1px solid var(--border)' : '1px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'background var(--duration-fast)',
-                  }}
-                  onClick={() => {
-                    onSelectConversation(conv.id);
-                    onClose();
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--text-muted)',
+                    margin: '0.4rem 0 0.2rem',
+                    paddingLeft: '0.4rem',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
-                    <MessageSquare size={14} style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }} />
-                    <span
+                  {group.label}
+                </span>
+
+                {group.conversations.map((conv) => {
+                  const isActive = conv.id === activeConversationId;
+                  return (
+                    <div
+                      key={conv.id}
                       style={{
-                        fontSize: '13px',
-                        color: 'var(--text-primary)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.45rem 0.55rem',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: isActive ? 'var(--surface-raised)' : 'transparent',
+                        border: isActive ? '1px solid var(--border)' : '1px solid transparent',
+                        cursor: 'pointer',
+                        transition: 'background var(--duration-fast)',
+                      }}
+                      onClick={() => {
+                        onSelectConversation(conv.id);
+                        onClose();
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                     >
-                      {conv.title}
-                    </span>
-                  </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0 }}>
+                        <MessageSquare size={14} style={{ color: isActive ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }} />
+                        <span
+                          style={{
+                            fontSize: '13px',
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {conv.title}
+                        </span>
+                      </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteConversation(conv.id);
-                    }}
-                    title="Delete consultation"
-                    style={{
-                      padding: '0.2rem',
-                      color: 'var(--text-muted)',
-                      opacity: isActive ? 1 : 0.6,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              );
-            })
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteConversation(conv.id);
+                        }}
+                        title="Delete consultation"
+                        style={{
+                          padding: '0.2rem',
+                          color: 'var(--text-muted)',
+                          opacity: isActive ? 1 : 0.6,
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ))
           )}
         </div>
 

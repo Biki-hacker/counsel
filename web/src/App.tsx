@@ -108,7 +108,8 @@ export const App: React.FC = () => {
   // Sync user defaults and handle account switching / logout state reset
   useEffect(() => {
     const currentUserId = user?.id || null;
-    if (prevUserIdRef.current !== currentUserId) {
+    // Only reset state if this is an explicit account switch (from an existing user to another user, or explicit logout)
+    if (prevUserIdRef.current !== null && prevUserIdRef.current !== currentUserId) {
       stopTypewriter();
       if (activeConvIdRef.current) {
         wsClient.cancel(activeConvIdRef.current);
@@ -125,9 +126,9 @@ export const App: React.FC = () => {
       setActiveMode('general');
       setPresetPrompt(undefined);
       setConversationToDelete(null);
-
-      prevUserIdRef.current = currentUserId;
     }
+
+    prevUserIdRef.current = currentUserId;
 
     if (user) {
       if (user.jurisdiction) setJurisdiction(user.jurisdiction);
@@ -310,15 +311,11 @@ export const App: React.FC = () => {
 
       switch (event.type) {
         case 'message.start':
-          if (event.conversationId) {
-            activeConvIdRef.current = event.conversationId;
-            setActiveConvId(event.conversationId);
-            chatStorage.setActiveConvId(event.conversationId);
-          }
-
-          if (event.conversationId && event.conversationId !== activeConvIdRef.current) {
-            refreshData();
-            return;
+          const startConvId = event.conversationId || activeConvIdRef.current || '';
+          if (startConvId) {
+            activeConvIdRef.current = startConvId;
+            setActiveConvId(startConvId);
+            chatStorage.setActiveConvId(startConvId);
           }
 
           setIsStreaming(true);
@@ -327,10 +324,9 @@ export const App: React.FC = () => {
           isStreamCompleteRef.current = false;
 
           if (event.messageId) {
-            const convId = event.conversationId || activeConvIdRef.current || '';
             const newAssistantMsg: Message = {
               id: event.messageId,
-              conversationId: convId,
+              conversationId: startConvId,
               userId: user?.id || '',
               role: 'assistant',
               content: '',
@@ -339,18 +335,20 @@ export const App: React.FC = () => {
             };
 
             setMessages((prev) => {
+              if (prev.some((m) => m.id === event.messageId)) return prev;
+
               const updatedUserMsgs = prev.map((m) =>
-                m.conversationId === '' && event.conversationId
-                  ? { ...m, conversationId: event.conversationId }
+                (!m.conversationId || m.conversationId === '') && startConvId
+                  ? { ...m, conversationId: startConvId }
                   : m
               );
               const updated = [...updatedUserMsgs, newAssistantMsg];
-              if (convId) {
-                chatStorage.saveMessages(convId, updated);
+              if (startConvId) {
+                chatStorage.saveMessages(startConvId, updated);
                 const firstUser = updatedUserMsgs.find((m) => m.role === 'user');
-                const title = firstUser?.content ? firstUser.content.slice(0, 42) : 'Legal Consultation';
+                const title = firstUser?.content ? (firstUser.content.length > 40 ? firstUser.content.slice(0, 40) + '...' : firstUser.content) : 'Legal Consultation';
                 chatStorage.saveConversation({
-                  id: convId,
+                  id: startConvId,
                   userId: user?.id || '',
                   title,
                   legalMode: activeMode,
@@ -364,8 +362,6 @@ export const App: React.FC = () => {
               return updated;
             });
           }
-
-          refreshData();
           break;
 
         case 'message.status':
@@ -488,11 +484,36 @@ export const App: React.FC = () => {
     if (!text.trim() && attachedDocs.length === 0) return;
 
     stopTypewriter();
-    const currentConvId = activeConvIdRef.current || activeConvId;
+    let currentConvId = activeConvIdRef.current || activeConvId;
+
+    if (!currentConvId) {
+      currentConvId = `cnv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      activeConvIdRef.current = currentConvId;
+      setActiveConvId(currentConvId);
+      chatStorage.setActiveConvId(currentConvId);
+
+      const cleanTitle = text.trim()
+        ? (text.trim().length > 40 ? text.trim().slice(0, 40) + '...' : text.trim())
+        : 'New Legal Consultation';
+
+      const newConv: Conversation = {
+        id: currentConvId,
+        userId: user?.id || '',
+        title: cleanTitle,
+        legalMode: mode,
+        jurisdiction,
+        aiProvider: provider,
+        aiMode,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      chatStorage.saveConversation(newConv);
+      setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== currentConvId)]);
+    }
 
     const userMsg: Message = {
       id: `usr_${Date.now()}`,
-      conversationId: currentConvId || '',
+      conversationId: currentConvId,
       userId: user?.id || '',
       role: 'user',
       content: text,
@@ -509,23 +530,25 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
 
-    setMessages((prev) => {
-      const updated = [...prev, userMsg];
-      if (currentConvId) {
-        chatStorage.saveMessages(currentConvId, updated);
-      }
-      return updated;
-    });
+    // The whole prior context of the conversation to pass together
+    const priorContext = [...messages];
+
+    const updated = [...messages, userMsg];
+    setMessages(updated);
+    chatStorage.saveMessages(currentConvId, updated);
 
     setIsStreaming(true);
     setStatusText('Counsel is reviewing legal context...');
 
     const docIds = attachedDocs.map((d) => d.id);
     const allImages = attachedDocs.flatMap((d) => d.pageImages || []).filter(Boolean);
+
+    // Send message with the whole conversation context passed together
     wsClient.send({
       type: 'message.send',
-      conversationId: currentConvId || undefined,
+      conversationId: currentConvId,
       prompt: text,
+      messages: priorContext,
       legalMode: mode,
       jurisdiction,
       aiProvider: provider,
@@ -609,9 +632,29 @@ export const App: React.FC = () => {
     handleNewConversation();
     setActiveMode('compare');
 
+    const currentConvId = `cnv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    activeConvIdRef.current = currentConvId;
+    setActiveConvId(currentConvId);
+    chatStorage.setActiveConvId(currentConvId);
+
+    const newConv: Conversation = {
+      id: currentConvId,
+      userId: user?.id || '',
+      title: 'Contract Comparison',
+      legalMode: 'compare',
+      jurisdiction,
+      aiProvider: provider,
+      aiMode,
+      documentIds: docIds,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    chatStorage.saveConversation(newConv);
+    setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== currentConvId)]);
+
     const userMsg: Message = {
       id: `usr_${Date.now()}`,
-      conversationId: '',
+      conversationId: currentConvId,
       userId: user?.id || '',
       role: 'user',
       content: prompt,
@@ -620,12 +663,16 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
     setMessages([userMsg]);
+    chatStorage.saveMessages(currentConvId, [userMsg]);
+
     setIsStreaming(true);
     setStatusText('Counsel is reviewing comparison context...');
 
     wsClient.send({
       type: 'message.send',
+      conversationId: currentConvId,
       prompt,
+      messages: [],
       legalMode: 'compare',
       jurisdiction,
       aiProvider: provider,
@@ -638,9 +685,28 @@ export const App: React.FC = () => {
     handleNewConversation();
     setActiveMode('prep_lawyer');
 
+    const currentConvId = `cnv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    activeConvIdRef.current = currentConvId;
+    setActiveConvId(currentConvId);
+    chatStorage.setActiveConvId(currentConvId);
+
+    const newConv: Conversation = {
+      id: currentConvId,
+      userId: user?.id || '',
+      title: 'Lawyer Briefing',
+      legalMode: 'prep_lawyer',
+      jurisdiction,
+      aiProvider: provider,
+      aiMode,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    chatStorage.saveConversation(newConv);
+    setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== currentConvId)]);
+
     const userMsg: Message = {
       id: `usr_${Date.now()}`,
-      conversationId: '',
+      conversationId: currentConvId,
       userId: user?.id || '',
       role: 'user',
       content: prompt,
@@ -649,12 +715,16 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
     setMessages([userMsg]);
+    chatStorage.saveMessages(currentConvId, [userMsg]);
+
     setIsStreaming(true);
     setStatusText('Counsel is preparing lawyer consultation briefing...');
 
     wsClient.send({
       type: 'message.send',
+      conversationId: currentConvId,
       prompt,
+      messages: [],
       legalMode: 'prep_lawyer',
       jurisdiction,
       aiProvider: provider,

@@ -65,6 +65,31 @@ export const chatStorage = {
   saveMessages(convId: string, messages: Message[]) {
     try {
       localStorage.setItem(`${MESSAGES_PREFIX}${convId}`, JSON.stringify(messages));
+
+      // Also ensure the conversation's updatedAt timestamp and title are in sync
+      const convs = this.getStoredConversations();
+      const idx = convs.findIndex((c) => c.id === convId);
+      if (idx >= 0) {
+        convs[idx] = {
+          ...convs[idx],
+          updatedAt: new Date().toISOString(),
+        };
+
+        // If conversation title is generic, update it with first user message
+        if (
+          !convs[idx].title ||
+          convs[idx].title === 'New Legal Consultation' ||
+          convs[idx].title === 'Legal Consultation'
+        ) {
+          const firstUser = messages.find((m) => m.role === 'user');
+          if (firstUser?.content) {
+            const clean = firstUser.content.trim();
+            convs[idx].title = clean.length > 40 ? clean.slice(0, 40) + '...' : clean;
+          }
+        }
+
+        localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(convs));
+      }
     } catch (e) {
       console.warn('Failed to save messages to localStorage', e);
     }
@@ -103,3 +128,46 @@ export const chatStorage = {
     }
   },
 };
+
+export interface ConversationGroup {
+  label: string;
+  conversations: Conversation[];
+}
+
+export function groupConversationsByDate(conversations: Conversation[]): ConversationGroup[] {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterdayStart = todayStart - 86400000;
+  const sevenDaysStart = todayStart - 7 * 86400000;
+  const thirtyDaysStart = todayStart - 30 * 86400000;
+
+  const today: Conversation[] = [];
+  const yesterday: Conversation[] = [];
+  const prev7Days: Conversation[] = [];
+  const prev30Days: Conversation[] = [];
+  const older: Conversation[] = [];
+
+  for (const conv of conversations) {
+    const d = new Date(conv.updatedAt || conv.createdAt).getTime();
+    if (d >= todayStart) {
+      today.push(conv);
+    } else if (d >= yesterdayStart) {
+      yesterday.push(conv);
+    } else if (d >= sevenDaysStart) {
+      prev7Days.push(conv);
+    } else if (d >= thirtyDaysStart) {
+      prev30Days.push(conv);
+    } else {
+      older.push(conv);
+    }
+  }
+
+  const groups: ConversationGroup[] = [];
+  if (today.length > 0) groups.push({ label: 'Today', conversations: today });
+  if (yesterday.length > 0) groups.push({ label: 'Yesterday', conversations: yesterday });
+  if (prev7Days.length > 0) groups.push({ label: 'Previous 7 Days', conversations: prev7Days });
+  if (prev30Days.length > 0) groups.push({ label: 'Previous 30 Days', conversations: prev30Days });
+  if (older.length > 0) groups.push({ label: 'Older', conversations: older });
+
+  return groups;
+}

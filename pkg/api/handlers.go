@@ -536,6 +536,28 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			conv = c
+		} else {
+			// Adopt client-provided conversation ID if not in store
+			title := req.Prompt
+			if len(title) > 40 {
+				title = title[:40] + "..."
+			}
+			if title == "" {
+				title = "Legal Consultation"
+			}
+			conv = &models.Conversation{
+				ID:           req.ConversationID,
+				UserID:       user.ID,
+				Title:        title,
+				LegalMode:    req.LegalMode,
+				Jurisdiction: req.Jurisdiction,
+				AIProvider:   req.AIProvider,
+				AIMode:       req.AIMode,
+				DocumentIDs:  req.DocumentIDs,
+				CreatedAt:    now,
+				UpdatedAt:    now,
+			}
+			_ = h.store.CreateConversation(ctx, conv)
 		}
 	}
 
@@ -643,7 +665,38 @@ func (h *APIHandler) HandleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 4. Retrieve prior conversation history
-	priorHistory, _ := h.store.ListMessages(ctx, conv.ID, 50)
+	var priorHistory []*models.Message
+	if len(req.Messages) > 0 {
+		for _, m := range req.Messages {
+			if m == nil {
+				continue
+			}
+			if m.Role != "user" && m.Role != "assistant" {
+				continue
+			}
+			if strings.TrimSpace(m.Content) == "" {
+				continue
+			}
+			priorHistory = append(priorHistory, m)
+			if m.ID != "" {
+				if _, err := h.store.GetMessage(ctx, m.ID); err != nil {
+					m.ConversationID = conv.ID
+					m.UserID = user.ID
+					_ = h.store.CreateMessage(ctx, m)
+				}
+			}
+		}
+	} else {
+		priorHistory, _ = h.store.ListMessages(ctx, conv.ID, 50)
+	}
+
+	// Avoid prompt duplication if the client included the current prompt at the end of messages
+	if len(priorHistory) > 0 {
+		lastIdx := len(priorHistory) - 1
+		if priorHistory[lastIdx].Role == "user" && strings.TrimSpace(priorHistory[lastIdx].Content) == strings.TrimSpace(req.Prompt) {
+			priorHistory = priorHistory[:lastIdx]
+		}
+	}
 
 	// Persist user message
 	userMsgID := "msg_" + uuid.New().String()

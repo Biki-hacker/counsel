@@ -167,6 +167,7 @@ type WebSocketIncomingMessage struct {
 	Type           string       `json:"type"` // "message.send", "message.cancel"
 	ConversationID string       `json:"conversationId"`
 	Prompt         string       `json:"prompt"`
+	Messages       []*Message   `json:"messages,omitempty"`
 	LegalMode      LegalMode    `json:"legalMode"`
 	Jurisdiction   Jurisdiction `json:"jurisdiction"`
 	AIProvider     AIProvider   `json:"aiProvider"`

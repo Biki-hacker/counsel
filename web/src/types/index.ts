@@ -122,6 +122,7 @@ export interface ClientEnvelope {
   type: 'message.send' | 'message.cancel' | 'ping';
   conversationId?: string;
   prompt?: string;
+  messages?: Message[];
   legalMode?: LegalMode;
   jurisdiction?: Jurisdiction;
   aiProvider?: AIProvider;

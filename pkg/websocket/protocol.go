@@ -25,6 +25,7 @@ type ClientEnvelope struct {
 	Type           string              `json:"type"`
 	ConversationID string              `json:"conversationId,omitempty"`
 	Prompt         string              `json:"prompt,omitempty"`
+	Messages       []*models.Message   `json:"messages,omitempty"`
 	LegalMode      models.LegalMode    `json:"legalMode,omitempty"`
 	Jurisdiction   models.Jurisdiction `json:"jurisdiction,omitempty"`
 	AIProvider     models.AIProvider   `json:"aiProvider,omitempty"`
